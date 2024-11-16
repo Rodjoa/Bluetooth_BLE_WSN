@@ -76,6 +76,7 @@ function App(): React.JSX.Element {
 
   const scanDevices = () => {
     if (manager) {
+      // Iniciar el escaneo
       manager.startDeviceScan(null, null, (error, device) => {
         if (error) {
           console.error(error);
@@ -93,43 +94,58 @@ function App(): React.JSX.Element {
         }
       });
     }
-  };
-
+  }
   //manager.stopDeviceScan(); // Detén el escaneo si está activo
+  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
   const connectDevice = async (deviceId: string) => {
+    console.log(`connectDevice called with deviceId: ${deviceId}`); // Log inicial
     if (manager) {
-      try {
-        // Primero verificamos si el dispositivo ya está conectado
-        const isConnected = await manager.isDeviceConnected(deviceId);
-        if (isConnected) {
-          console.log(`Device ${deviceId} is already connected.`);
-          return; // Salir si ya está conectado
+        try {
+            console.log(`Checking if device ${deviceId} is already connected...`);
+            
+            // Pausa antes de comprobar el estado de conexión
+            await delay(1000); // 1000 ms = 1 segundo
+
+            const isConnected = await manager.isDeviceConnected(deviceId);
+            console.log(`Connection status for device ${deviceId}: ${isConnected}`);
+
+            if (isConnected) {
+                console.log(`Device ${deviceId} is already connected.`);
+                return; // Salir si ya está conectado
+            }
+
+            console.log(`Attempting to connect to device: ${deviceId}`);
+
+            // Pausa antes de intentar la conexión
+            await delay(1000);
+
+            // Intentamos conectarnos al dispositivo
+            const connectedDevice = await manager.connectToDevice(deviceId);
+
+            // Pausa antes de verificar el dispositivo conectado
+            await delay(5000);
+
+            console.log('Connection attempt completed.');
+            console.log('Connected to device:', connectedDevice.id);
+
+            // Otros log para verificar el estado del dispositivo conectado
+            console.log('Device name:', connectedDevice.name);
+
+            console.log('Device connected:', await connectedDevice.isConnected());
+      
+      
+
+        } catch (error) {
+            if (error instanceof Error) {
+                console.error('Error connecting to device:', error.message);
+            } else {
+                console.error('Error connecting to device:', error);
+            }
         }
-  
-        console.log(`Attempting to connect to device: ${deviceId}`);
-  
-        // Intentamos conectarnos al dispositivo
-        const connectedDevice = await manager.connectToDevice(deviceId);
-  
-        // Asegurarnos de que la conexión se ha completado
-        console.log('Connected to device:', connectedDevice.id);
-  
-        // Otros log para verificar el estado del dispositivo conectado
-        console.log('Device name:', connectedDevice.name);
-        console.log('Device connected:', connectedDevice.isConnected());
-  
-      } catch (error) {
-        // Verificar que el error sea una instancia de Error
-        if (error instanceof Error) {
-          console.error('Error connecting to device:', error.message);
-        } else {
-          // Si no es una instancia de Error, simplemente imprimir el error
-          console.error('Error connecting to device:', error);
-        }
-      }
     }
-  };
-  
+};
+
   return (
     <View>
       <Text>Bluetooth Status: {bluetoothStatus}</Text>
