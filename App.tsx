@@ -93,6 +93,13 @@ function App(): React.JSX.Element {
           });
         }
       });
+       // Detener el escaneo después de 20 segundos
+    setTimeout(() => {
+      console.log("Stopping device scan after 20 seconds...");
+      manager.stopDeviceScan();
+    }, 20000); // 20,000 ms = 20 segundos
+
+
     }
   }
   //manager.stopDeviceScan(); // Detén el escaneo si está activo
@@ -146,6 +153,36 @@ function App(): React.JSX.Element {
     }
 };
 
+const readHumidity = async (deviceId: string) => {
+  console.log(`readHumidity called with deviceId: ${deviceId}`);
+  if (manager) {
+    try {
+      const serviceUuid = "12345678-1234-1234-1234-123456789abc"; // UUID del servicio del ESP32
+      const characteristicUuid = "abcdef12-1234-1234-1234-abcdef123456"; // UUID de la característica del sensor
+
+      console.log("Discovering services and characteristics...");
+      await manager.discoverAllServicesAndCharacteristicsForDevice(deviceId);
+
+      console.log("Reading humidity characteristic...");
+      const characteristic = await manager.readCharacteristicForDevice(
+        deviceId,
+        serviceUuid,
+        characteristicUuid
+      );
+
+      // Los datos se reciben en base64 y deben decodificarse
+      const humidityValue = atob(characteristic.value || "");
+      console.log("Humedad recibida:", humidityValue);
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error("Error reading humidity:", error.message);
+      } else {
+        console.error("Error reading humidity:", error);
+      }
+    }
+  }
+};
+
   return (
     <View>
       <Text>Bluetooth Status: {bluetoothStatus}</Text>
@@ -155,12 +192,38 @@ function App(): React.JSX.Element {
         <View key={device.id}>
           <Text>{device.name || 'Unnamed Device'}</Text>
           <Button title="Connect" onPress={() => connectDevice(device.id)} />
+          <Button title="Read Humidity" onPress={() => readHumidity(device.id)} />
         </View>
       ))}
     </View>
   );
 }
-//fin ultimo
+
+const styles = StyleSheet.create({
+  sectionTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginVertical: 16,
+  },
+  sectionDescription: {
+    fontSize: 18,
+    fontWeight: '400',
+    textAlign: 'center',
+    marginVertical: 8,
+  },
+});
+
+export default App;
+
+
+
+
+
+
+
+
+//fin ultimo Detect On Off Phone Bluetooth
 
   /*
   return (
@@ -190,19 +253,3 @@ function App(): React.JSX.Element {
   );
 }
 */
-const styles = StyleSheet.create({
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginVertical: 16,
-  },
-  sectionDescription: {
-    fontSize: 18,
-    fontWeight: '400',
-    textAlign: 'center',
-    marginVertical: 8,
-  },
-});
-
-export default App;
