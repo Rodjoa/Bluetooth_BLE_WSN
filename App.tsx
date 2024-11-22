@@ -1,27 +1,15 @@
-/**
- * Sample React Native App with Bluetooth State Check
- * https://github.com/facebook/react-native
- *
- * @format
- */
-
 import React, { useEffect, useState } from 'react';
 import {
-  SafeAreaView,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  useColorScheme,
   View,
+  Text,
   Button,
   PermissionsAndroid,
   Platform,
 } from 'react-native';
 import BluetoothStateManager from 'react-native-bluetooth-state-manager';
-import { Colors } from 'react-native/Libraries/NewAppScreen';
 import { BleManager, Device } from 'react-native-ble-plx';
 
+// Solicitar permisos de ubicación (necesario para BLE en Android)
 const requestPermissions = async () => {
   if (Platform.OS === 'android' && Platform.Version >= 23) {
     try {
@@ -46,37 +34,31 @@ function App(): React.JSX.Element {
   const [bluetoothStatus, setBluetoothStatus] = useState('');
   const [manager, setManager] = useState<BleManager | null>(null);
   const [devices, setDevices] = useState<Device[]>([]);
-  const isDarkMode = useColorScheme() === 'dark';
-
-  const backgroundStyle = {
-    backgroundColor: isDarkMode ? Colors.darker : Colors.lighter,
-  };
 
   useEffect(() => {
-    const checkPermissions = async () => {
+    const initialize = async () => {
       const hasPermissions = await requestPermissions();
       if (!hasPermissions) {
         console.error('Permission denied');
       }
+
+      const bleManager = new BleManager();
+      setManager(bleManager);
+
+      BluetoothStateManager.getState().then(setBluetoothStatus);
+
+      const subscription = BluetoothStateManager.onStateChange((state) => {
+        setBluetoothStatus(state);
+      }, true);
+
+      return () => subscription.remove();
     };
 
-    const bleManager = new BleManager();
-    setManager(bleManager);
-
-    checkPermissions();
-
-    BluetoothStateManager.getState().then(setBluetoothStatus);
-
-    const subscription = BluetoothStateManager.onStateChange((state) => {
-      setBluetoothStatus(state);
-    }, true);
-
-    return () => subscription.remove();
+    initialize();
   }, []);
 
   const scanDevices = () => {
     if (manager) {
-      // Iniciar el escaneo
       manager.startDeviceScan(null, null, (error, device) => {
         if (error) {
           console.error(error);
@@ -84,7 +66,6 @@ function App(): React.JSX.Element {
         }
         if (device) {
           setDevices((prevDevices) => {
-            // Evitar duplicados verificando el ID del dispositivo
             const deviceExists = prevDevices.some((d) => d.id === device.id);
             if (!deviceExists) {
               return [...prevDevices, device];
@@ -93,95 +74,56 @@ function App(): React.JSX.Element {
           });
         }
       });
-       // Detener el escaneo después de 20 segundos
-    setTimeout(() => {
-      console.log("Stopping device scan after 20 seconds...");
-      manager.stopDeviceScan();
-    }, 20000); // 20,000 ms = 20 segundos
 
-
+      setTimeout(() => {
+        manager.stopDeviceScan();
+      }, 20000);
     }
-  }
-  //manager.stopDeviceScan(); // Detén el escaneo si está activo
-  const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+  };
 
   const connectDevice = async (deviceId: string) => {
-    console.log(`connectDevice called with deviceId: ${deviceId}`); // Log inicial
     if (manager) {
-        try {
-            console.log(`Checking if device ${deviceId} is already connected...`);
-            
-            // Pausa antes de comprobar el estado de conexión
-            await delay(1000); // 1000 ms = 1 segundo
-
-            const isConnected = await manager.isDeviceConnected(deviceId);
-            console.log(`Connection status for device ${deviceId}: ${isConnected}`);
-
-            if (isConnected) {
-                console.log(`Device ${deviceId} is already connected.`);
-                return; // Salir si ya está conectado
-            }
-
-            console.log(`Attempting to connect to device: ${deviceId}`);
-
-            // Pausa antes de intentar la conexión
-            await delay(1000);
-
-            // Intentamos conectarnos al dispositivo
-            const connectedDevice = await manager.connectToDevice(deviceId);
-
-            // Pausa antes de verificar el dispositivo conectado
-            await delay(5000);
-
-            console.log('Connection attempt completed.');
-            console.log('Connected to device:', connectedDevice.id);
-
-            // Otros log para verificar el estado del dispositivo conectado
-            console.log('Device name:', connectedDevice.name);
-
-            console.log('Device connected:', await connectedDevice.isConnected());
-      
-      
-
-        } catch (error) {
-            if (error instanceof Error) {
-                console.error('Error connecting to device:', error.message);
-            } else {
-                console.error('Error connecting to device:', error);
-            }
+      try {
+        const isConnected = await manager.isDeviceConnected(deviceId);
+        if (!isConnected) {
+          await manager.connectToDevice(deviceId);
         }
-    }
-};
-
-const readHumidity = async (deviceId: string) => {
-  console.log(`readHumidity called with deviceId: ${deviceId}`);
-  if (manager) {
-    try {
-      const serviceUuid = "12345678-1234-1234-1234-123456789abc"; // UUID del servicio del ESP32
-      const characteristicUuid = "abcdef12-1234-1234-1234-abcdef123456"; // UUID de la característica del sensor
-
-      console.log("Discovering services and characteristics...");
-      await manager.discoverAllServicesAndCharacteristicsForDevice(deviceId);
-
-      console.log("Reading humidity characteristic...");
-      const characteristic = await manager.readCharacteristicForDevice(
-        deviceId,
-        serviceUuid,
-        characteristicUuid
-      );
-
-      // Los datos se reciben en base64 y deben decodificarse
-      const humidityValue = atob(characteristic.value || "");
-      console.log("Humedad recibida:", humidityValue);
-    } catch (error) {
-      if (error instanceof Error) {
-        console.error("Error reading humidity:", error.message);
-      } else {
-        console.error("Error reading humidity:", error);
+        await manager.discoverAllServicesAndCharacteristicsForDevice(deviceId);
+        console.log(`Connected to device: ${deviceId}`);
+      } catch (error) {
+        console.error('Error connecting to device:', error);
       }
     }
-  }
-};
+  };
+
+  const readHumidity = async (deviceId: string) => {
+    await readCharacteristic(deviceId, "12345678-1234-1234-1234-123456789abc", "abcdef12-1234-1234-1234-abcdef123456", "Humedad");
+  };
+
+  const readBattery = async (deviceId: string) => {
+    await readCharacteristic(deviceId, "23456789-2345-2345-2345-234567890bcd", "bcdef123-2345-2345-2345-bcdef1234567", "Batería");
+  };
+
+  const readLight = async (deviceId: string) => {
+    const result = await readCharacteristic(deviceId, "34567890-3456-3456-3456-345678901cde", "cdef2345-3456-3456-3456-cdef23456789", "Luz");
+    if (result) {
+      const lightValues = atob(result).split(",").map(Number);
+      console.log("Valores de luz recibidos:", lightValues);
+    }
+  };
+
+  const readCharacteristic = async (deviceId: string, serviceUuid: string, characteristicUuid: string, label: string) => {
+    if (manager) {
+      try {
+        const characteristic = await manager.readCharacteristicForDevice(deviceId, serviceUuid, characteristicUuid);
+        const value = atob(characteristic.value || "");
+        console.log(`${label} recibida:`, value);
+        return value;
+      } catch (error) {
+        console.error(`Error leyendo ${label}:`, error);
+      }
+    }
+  };
 
   return (
     <View>
@@ -193,30 +135,15 @@ const readHumidity = async (deviceId: string) => {
           <Text>{device.name || 'Unnamed Device'}</Text>
           <Button title="Connect" onPress={() => connectDevice(device.id)} />
           <Button title="Read Humidity" onPress={() => readHumidity(device.id)} />
+          <Button title="Read Battery" onPress={() => readBattery(device.id)} />
+          <Button title="Read Light" onPress={() => readLight(device.id)} />
         </View>
       ))}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  sectionTitle: {
-    fontSize: 24,
-    fontWeight: '600',
-    textAlign: 'center',
-    marginVertical: 16,
-  },
-  sectionDescription: {
-    fontSize: 18,
-    fontWeight: '400',
-    textAlign: 'center',
-    marginVertical: 8,
-  },
-});
-
 export default App;
-
-
 
 
 
